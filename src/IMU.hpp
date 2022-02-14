@@ -3,6 +3,8 @@
 #define IMU_HPP
 
 #include "MPU6050.h"
+#include "MessageHandler.hpp"
+#include "Defines.hpp"
 
 class IMU {
 public:
@@ -62,7 +64,7 @@ private:
     int c_len = 10;
     float prevAccX[10] = { 0.0F };
     float prevAccY[10] = { 0.0F };
-    float cmpTh[10] = { 0.0F };
+    float prevGyroZ[10] = { 0.0F };
     
     int v_len = 3;
     float prevVelX[3] = { 0.0F };
@@ -72,8 +74,35 @@ private:
     float outY = 0.0F;
     float outTh = 0.0F;
     
-    // TO BE DELETED
-    int q = 0;
+    float R = 1.0F;
+
+    float X = R;
+    float Y = 0.0F;
+
+    float Xbot = R;
+    float Ybot = 0.0F;
+    float THbot = 0.0F;
+
+    float Xdbot = 0.0F;
+    float Ydbot = 0.0F;
+    float THdbot = 0.0F;
+
+    float uX = 0.0F;
+    float uY = 0.0F;
+    float uTH = 0.0F;
+    
+    // Controller parameters
+    float KpR = 3.0F;//5.0F;
+    float KpPHI = 2.0;//4.0F;
+    float KpTH = 2.0F;
+
+    float KdR = -1.0F;
+    float KdPHI = -2.0F;
+    float KdTH = -0.5F;
+
+    float Xref = 0.0F;
+    float Yref = 0.0F;
+
 
     void getValues();
     void calculateRotations();
@@ -91,6 +120,8 @@ private:
     void calcTurn(float rotd, float* out);
     
     void outputValues(unsigned long t);
+
+    MessageHandler messenger = MessageHandler();
 
 };
 
