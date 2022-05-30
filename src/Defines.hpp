@@ -4,7 +4,7 @@
 
 /* Debug prints uncomment to print debug information
  */
-// #define DEBUG
+#define DEBUG
 
 #endif // DEFINES_HPP
 

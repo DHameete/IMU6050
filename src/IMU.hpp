@@ -31,6 +31,10 @@ private:
     int dt; 
     unsigned long t_prev = millis();
 
+    float accXraw = 0.0F;
+    float accYraw = 0.0F;
+    float accZraw = 0.0F;
+
     float accX = 0.0F;
     float accY = 0.0F;
     float accZ = 0.0F;
@@ -45,30 +49,38 @@ private:
 
     float temp;
 
-    float x_off = 0.0F;
-    float y_off = 0.0F;
-    float z_off = 0.0F;
-
-    float gX_off = 0.0F;
-    float gY_off = 0.0F;
-    float gZ_off = 0.0F;
-
     float velX = 0.0F;
     float velY = 0.0F;
     float th = 0.0F;
 
-    float ACC_FILTER = 0.03;
+    float ACC_FILTER = 0.0;//0.06;//0.03;
     float GYRO_FILTER = 3;
+    float MV_FILTER = 0*0.05;
+    float VEL_FILTER = 0.0001; //TODO: make moving average more smooth?!!
     float OUTPUT_FILTER = 0.003;
 
     int c_len = 10;
     float prevAccX[10] = { 0.0F };
     float prevAccY[10] = { 0.0F };
     float prevGyroZ[10] = { 0.0F };
-    
+
+    float accXaccumulator = 0.0F;
+    float accYaccumulator = 0.0F;
+    float accZaccumulator = 0.0F;
+
+    float prevAccXflt[10] = { 0.0F };
+    float prevAccYflt[10] = { 0.0F };
+        
     int v_len = 3;
     float prevVelX[3] = { 0.0F };
     float prevVelY[3] = { 0.0F };
+
+    int b_indx = 0;
+    int b_len = 255;
+    float biasAccX[255] = { 0.0F };
+    float biasAccY[255] = { 0.0F };
+    float biasAccZ[255] = { 0.0F };
+
 
     float outX = 0.0F;
     float outY = 0.0F;
@@ -92,8 +104,8 @@ private:
     float uTH = 0.0F;
     
     // Controller parameters
-    float KpR = 3.0F;//5.0F;
-    float KpPHI = 2.0;//4.0F;
+    float KpR = 0.5*5.0F;//3.0F;//5.0F;
+    float KpPHI = 0.5*4.0F;//2.0;//4.0F;
     float KpTH = 2.0F;
 
     float KdR = -1.0F;
@@ -103,6 +115,7 @@ private:
     float Xref = 0.0F;
     float Yref = 0.0F;
 
+    float accumulator = 0.0F;
 
     void getValues();
     void calculateRotations();
@@ -110,18 +123,24 @@ private:
     void filterAccel();
     void filterGyro();
 
+    void zeroingAccel(float* biasAcc, float* acc, uint8_t ind);
+
     void calculateDerivative();
-    
+    void movingAverage(float* prevAcc, float* acc);
+    void movingAverage_exponential(float* prevAcc, float* acc);
 
     void calcVelocity(float* prevAcc, float acc, float* vel);
     void calcAngle(float* prevStates, float vel, float* angle);
 
-    void calcDirection(float* prevVel, float vel, float* out);
-    void calcTurn(float rotd, float* out);
+
+    void calcPosition(float* prevVel, float vel, float* out);
     
     void outputValues(unsigned long t);
 
     MessageHandler messenger = MessageHandler();
+
+
+    float tpnt = 0;
 
 };
 
