@@ -31,55 +31,40 @@ private:
     int dt; 
     unsigned long t_prev = millis();
 
-    float accXraw = 0.0F;
-    float accYraw = 0.0F;
-    float accZraw = 0.0F;
+    float accRaw[3] = { 0.0F };
+    float gyroRaw[3] = { 0.0F };
 
-    float accX = 0.0F;
-    float accY = 0.0F;
-    float accZ = 0.0F;
-
-    float gyroX = 0.0F;
-    float gyroY = 0.0F;
-    float gyroZ = 0.0F;
-
-    float pitch = 0.0F;
-    float roll  = 0.0F;
-    float yaw   = 0.0F;
+    float gyro[3] = { 0.0F };
+    float acc[3] = { 0.0F };
 
     float temp;
 
-    float velX = 0.0F;
-    float velY = 0.0F;
-    float th = 0.0F;
+    float vel[3] = { 0.0F };
+    float ang[3] = { 0.0F };
 
-    float ACC_FILTER = 0.0;//0.06;//0.03;
     float GYRO_FILTER = 3;
-    float MV_FILTER = 0*0.05;
     float VEL_FILTER = 0.0001; //TODO: make moving average more smooth?!!
     float OUTPUT_FILTER = 0.003;
+    float alpha = 0.01;
 
-    int c_len = 10;
-    float prevAccX[10] = { 0.0F };
-    float prevAccY[10] = { 0.0F };
-    float prevGyroZ[10] = { 0.0F };
+    
+    float prevAccX[c_len] = { 0.0F };
+    float prevAccY[c_len] = { 0.0F };
+    float prevGyroZ[c_len] = { 0.0F };
 
-    float accXaccumulator = 0.0F;
-    float accYaccumulator = 0.0F;
-    float accZaccumulator = 0.0F;
+    float accAccum[3] = { 0.0F };
 
-    float prevAccXflt[10] = { 0.0F };
-    float prevAccYflt[10] = { 0.0F };
+    float prevAccXflt[c_len] = { 0.0F };
+    float prevAccYflt[c_len] = { 0.0F };
         
-    int v_len = 3;
-    float prevVelX[3] = { 0.0F };
-    float prevVelY[3] = { 0.0F };
+    
+    float prevVelX[v_len] = { 0.0F };
+    float prevVelY[v_len] = { 0.0F };
 
     int b_indx = 0;
-    int b_len = 255;
-    float biasAccX[255] = { 0.0F };
-    float biasAccY[255] = { 0.0F };
-    float biasAccZ[255] = { 0.0F };
+    float biasAccX[b_len] = { 0.0F };
+    float biasAccY[b_len] = { 0.0F };
+    float biasAccZ[b_len] = { 0.0F };
 
 
     float outX = 0.0F;
@@ -118,7 +103,6 @@ private:
     float accumulator = 0.0F;
 
     void getValues();
-    void calculateRotations();
 
     void filterAccel();
     void filterGyro();
@@ -140,7 +124,6 @@ private:
     MessageHandler messenger = MessageHandler();
 
 
-    float tpnt = 0;
 
 };
 

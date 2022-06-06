@@ -26,19 +26,20 @@ void IMU::init() {
   aRes = mpu.getAres();
   gRes = mpu.getGres();
 
-  int n = 1;
+  uint16_t n = 1;
   while(n < 3000) {
-      mpu.readAccelData(accelCount);  // Read the x/y/z adc values
-      accOff[0] += -9.81*((float)accelCount[0]*aRes - accOff[0]) / n;
-      accOff[1] += 9.81*((float)accelCount[1]*aRes - accOff[1]) / n;
-      accOff[2] += 9.81*((float)accelCount[2]*aRes - accOff[2]) / n;
 
-      mpu.readGyroData(gyroCount);  // Read the x/y/z adc values
-      gyroOff[0] += ((float)gyroCount[0]*gRes - gyroOff[0]) / n;
-      gyroOff[1] += ((float)gyroCount[1]*gRes - gyroOff[1]) / n;
-      gyroOff[2] += ((float)gyroCount[2]*gRes - gyroOff[2]) / n;
+    getValues();
+    
+    accOff[0] += (arrRaw[0] - accOff[0]) / n;
+    accOff[1] += (arrRaw[1] - accOff[1]) / n;
+    accOff[2] += (arrRaw[2] - accOff[2]) / n;
 
-      n++;
+    gyroOff[0] += (gyro[0] - gyroOff[0]) / n;
+    gyroOff[1] += (gyro[1] - gyroOff[1]) / n;
+    gyroOff[2] += (gyro[2] - gyroOff[2]) / n;
+
+    n++;
   }
 
   t_prev = millis();
@@ -52,17 +53,17 @@ void IMU::getValues() {
 
     mpu.readAccelData(accelCount);  // Read the x/y/z adc values
     
-    // Now we'll calculate the accleration value into actual g's
-    accZraw = -9.81*((float)accelCount[0]*aRes);  // get actual g value, this depends on scale being set
-    accYraw = 9.81*((float)accelCount[1]*aRes);   
-    accXraw = 9.81*((float)accelCount[2]*aRes);  
+    // Get actual g value, this depends on scale being set
+    accRaw[0] =  9.81*((float) accelCount[2]*aRes);  
+    accRaw[1] =  9.81*((float) accelCount[1]*aRes);   
+    accRaw[2] = -9.81*((float) accelCount[0]*aRes);
    
     mpu.readGyroData(gyroCount);  // Read the x/y/z adc values
  
-    // Calculate the gyro value into actual degrees per second
-    gyroZ = -((float)gyroCount[0]*gRes - gyroOff[0]);  // get actual gyro value, this depends on scale being set
-    gyroY = (float)gyroCount[1]*gRes - gyroOff[1];  
-    gyroX = (float)gyroCount[2]*gRes - gyroOff[2];   
+    // Get actual gyro value, this depends on scale being set
+    gyroRaw[0] =   (float) gyroCount[2]*gRes;   
+    gyroRaw[1] =   (float) gyroCount[1]*gRes;  
+    gyroRaw[2] = -((float) gyroCount[0]*gRes);  
 
     tempCount = mpu.readTempData();  // Read the x/y/z adc values
     temperature = ((float) tempCount) / 340. + 36.53; // Temperature in degrees Centigrade
@@ -71,11 +72,6 @@ void IMU::getValues() {
 }
 
 void IMU::calcVelocity(float* prevAcc, float acc, float* vel) {
-  
-  // for (uint8_t i = 0; i < c_len-1; i++) {
-  //   prevAcc[i] = prevAcc[i+1];
-  // }
-  // prevAcc[c_len-1] = acc;
 
   float sumdiff = 0.0F;
   for (uint8_t i = 0; i < c_len; i++) {
@@ -143,16 +139,16 @@ void IMU::outputValues(unsigned long t) {
 
 
   Serial.print(",");
-  Serial.print(accX);
+  Serial.print(acc[0]);
   Serial.print(",");
-  Serial.print(accY);
+  Serial.print(acc[1]);
   // Serial.print(",");
   // Serial.print(accZ);
 
   Serial.print(",");
-  Serial.print(velX);
+  Serial.print(vel[0]);
   Serial.print(",");
-  Serial.print(velY);
+  Serial.print(vel[1]);
 
   Serial.print(",");
   Serial.print(Xref);
@@ -160,28 +156,13 @@ void IMU::outputValues(unsigned long t) {
   Serial.print(Yref);
   
   Serial.print(",");
-  Serial.print(gyroZ*DEG_TO_RAD);
+  Serial.print(gyro[2]*DEG_TO_RAD);
   Serial.print(",");
-  Serial.print(th*DEG_TO_RAD);
-
-  Serial.print(",");
-  Serial.print(pitch);
-  Serial.print(",");
-  Serial.print(roll);
-  Serial.print(",");
-  Serial.println(yaw);
+  Serial.print(ang[2]*DEG_TO_RAD);
 
   // for i = 1:10:
   //   Serial.print(logger[i]);
   // logger[i] = *pointer_to_value_i
-
-}
-
-void IMU::calculateRotations() {
-
-  pitch = atan2(accXraw, sqrt(accYraw*accYraw + accZraw*accZraw)) * RAD_TO_DEG;
-  roll = atan2(accYraw, sqrt(accXraw*accXraw + accZraw*accZraw)) * RAD_TO_DEG;
-  yaw = atan2(accZraw, sqrt(accXraw*accXraw + accYraw*accYraw)) * RAD_TO_DEG;
 
 }
 
@@ -224,33 +205,11 @@ void IMU::zeroingAccel(float* biasAcc, float* acc, uint8_t ind) {
 
 }
 
-
-void IMU::movingAverage(float* prevAcc, float* acc) {
-  for (uint8_t i = 0; i < c_len-1; i++) {
-    prevAcc[i] = prevAcc[i+1];
-  }
-  prevAcc[c_len-1] = *acc;
+void IMU::movingAverage_exponential(float* accum, float* acc) {
 
   // Average accelerations
-  float sumAcc = 0.0F;
-  for (uint8_t i = 0; i < c_len; i++) {
-    sumAcc += prevAcc[i];
-  }
-  sumAcc = sumAcc / c_len;
-
-  if (abs(sumAcc) < MV_FILTER) {
-    *acc = 0;
-  } else {
-    *acc = sumAcc;
-  }
-}
-
-void IMU::movingAverage_exponential(float* accumulator, float* acc) {
-  float alpha = 0.01;
-
-  // Average accelerations
-  *accumulator = (alpha * *acc) + (1 - alpha) * *accumulator;
-  *acc = *accumulator;
+  *accum = (alpha * *acc) + (1 - alpha) * *accum;
+  *acc = *accum;
 }
 
 
@@ -259,19 +218,19 @@ void IMU::filterGyro() {
   // Center and filter velocity
 
   // Pitch
-  gyroX *= (abs(gyroX) > GYRO_FILTER);
+  gyro[0] *= (abs(gyro[0]]) > GYRO_FILTER);
   
   // Roll
-  gyroY *= (abs(gyroY) > GYRO_FILTER);
+  gyro[1] *= (abs(gyro[1]) > GYRO_FILTER);
 
   // Yaw
-  gyroZ *= (abs(gyroZ) > GYRO_FILTER);
+  gyroZ[2] *= (abs(gyro[2]) > GYRO_FILTER);
 
 }
 
 void IMU::calculateDerivative() {
 
-  calcVelocity(prevAccXflt, accX, &velX);
+  calcVelocity(prevAccXflt, acc[0], &velX);
   calcPosition(prevVelX, velX, &Xref);
   calcVelocity(prevAccYflt, accY, &velY);
   calcPosition(prevVelY, velY, &Yref);
@@ -290,137 +249,122 @@ void IMU::update(unsigned long t) {
   filterAccel();
   filterGyro();
 
-  movingAverage_exponential(&accXaccumulator, &accX);
-  movingAverage_exponential(&accYaccumulator, &accY);
-  movingAverage_exponential(&accZaccumulator, &accZ);
+  movingAverage_exponential(&accAccum, acc[0]);
+  movingAverage_exponential(&accYaccumulator, acc[1]);
+  movingAverage_exponential(&accZaccumulator, acc[2]);
 
-  calculateRotations();
   calculateDerivative();
 
-  zeroingAccel(biasAccX, &accXraw, 2);
-  zeroingAccel(biasAccY, &accYraw, 1);
-  zeroingAccel(biasAccZ, &accZraw, 0);
+  zeroingAccel(biasAccX, acc[0], 2);
+  zeroingAccel(biasAccY, acc[1], 1);
+  zeroingAccel(biasAccZ, acc[2], 0);
 
 
   // Increase index
   b_indx++;
   b_indx = (b_indx % b_len);
 
-
-
-
-  while(Serial.available()){
-    int8_t xVal = (int8_t) Serial.read();
-    Xbot = (float) xVal/40;
-    int8_t yVal = (int8_t) Serial.read();
-    Ybot = (float) yVal/40;
-    int8_t thVal = (int8_t) Serial.read();
-    THbot = (float) (thVal*M_PI)/127+M_PI;
-
-    int8_t xdVal = (int8_t) Serial.read();
-    Xdbot = (float) xdVal*16/1000;
-    int8_t ydVal = (int8_t) Serial.read();
-    Ydbot = (float) ydVal*16/1000;
-    int8_t thdVal = (int8_t) Serial.read();
-    THdbot = (float) (thdVal*64)/1000;
-  }
-
-  // Xref = 1;
-  // Yref = 0;
-
-  // Velocity vector based
-  // X = X - R * sin(th*DEG_TO_RAD) * gyroZ*DEG_TO_RAD * dt / 1000;
-  // Y = Y + R * cos(th*DEG_TO_RAD) * gyroZ*DEG_TO_RAD * dt / 1000;
-
-
-  // Calculate cartesian errors 
-  // float deltaX = X - Xbot;
-  // float deltaY = Y - Ybot;
-    
-  // float eX = -(deltaY * cos(THbot) - deltaX * sin(THbot));
-  // float eY = (deltaY * sin(THbot) + deltaX * cos(THbot));
-  
-  // float eXd = (eX - eXprev) * dt;
-  // float eYd = (eY - eYprev) * dt;
-
-  // Calculate polar errors
- 
-   // Reference angle based
-  X = R * cos(th*DEG_TO_RAD);
-  Y = R * sin(th*DEG_TO_RAD);
-
-  float Rref = sqrt(X*X + Y*Y);
-  float PHIref = atan2(Y,X);
-
-  float Xbot_c = Xbot - Xref;
-  float Ybot_c = Ybot - Yref;
-
-  float Rbot = sqrt(Xbot_c*Xbot_c + Ybot_c*Ybot_c);
-  float PHIbot = atan2(Ybot_c,Xbot_c);
-
-  float eR = Rref - Rbot;
-  float ePHI = PHIref - PHIbot;
-
-  PHIbot = fmod(2*M_PI + fmod(PHIbot, 2*M_PI), 2*M_PI);  
-
-  // Shortest angle
-  if (ePHI > M_PI) {
-    ePHI -= 2*M_PI;
-  } else if (ePHI < -M_PI) {
-    ePHI += 2*M_PI;
-  }
-
-  float KpPHI_ePHI = max(min(KpPHI * ePHI, M_PI/2), -M_PI/2);//5),-5);//M_PI/2), -M_PI/2);
-  // float KpPHI_ePHI = KpPHI * ePHI;
-
-  float deltaX = KpR * eR * cos(PHIbot) - KpPHI_ePHI * sin(PHIbot);
-  float deltaY = KpR * eR * sin(PHIbot) + KpPHI_ePHI * cos(PHIbot);
-
-  float eX = -(deltaY * cos(THbot) - deltaX * sin(THbot));
-  float eY = (deltaY * sin(THbot) + deltaX * cos(THbot));
-
-
-  float Rdbot   =  Xdbot * cos(PHIbot) + Ydbot * sin(PHIbot);
-  float PHIdbot = -Xdbot * sin(PHIbot) + Ydbot * cos(PHIbot);
-
-  float deltaXd = KdR * Rdbot * cos(PHIbot) - KdPHI * PHIdbot * sin(PHIbot);
-  float deltaYd = KdR * Rdbot * sin(PHIbot) + KdPHI * PHIdbot * cos(PHIbot);
-
-  float eXd = -(deltaYd * cos(THbot) - deltaXd * sin(THbot));
-  float eYd = (deltaYd * sin(THbot) + deltaXd * cos(THbot));
-
-  // Angle error
-  // float eTH = th*DEG_TO_RAD - THbot;
-  float eTH = PHIbot - THbot;
-  
-  // Shortest angle
-  if (eTH > M_PI) {
-    eTH -= 2*M_PI;
-  } else if (eTH < -M_PI) {
-    eTH += 2*M_PI;
-  }
-
-
-  uX = eX + eXd;// - R*(gyroZ*DEG_TO_RAD);
-  uX = max(min(uX,2),-2);
-  uY = eY + eYd;
-  uY = max(min(uY,2),-2);
-  uTH = KpTH * eTH + KdTH * THdbot;// + gyroZ*DEG_TO_RAD;
-  uTH = max(min(uTH,8),-8);
-
-  #ifdef DEBUG
-    outputValues(t);
-  #else
-    // messenger.update(0,(R*(gyroZ*DEG_TO_RAD))*32767/2);
-    messenger.update(0, uX*32767/2);
-    delay(1);
-    // messenger.update(1,0);
-    messenger.update(1, uY*32767/2);
-    delay(1);
-    messenger.update(2, uTH*32767/8);
-    delay(1);
-  #endif
-
-  t_prev = t;
-
+  calculateReference();
+  controlOutput();
 }
+
+// void IMU::calculateReference() {}
+
+//   while(Serial.available()){
+//     int8_t xVal = (int8_t) Serial.read();
+//     Xbot = (float) xVal/40;
+//     int8_t yVal = (int8_t) Serial.read();
+//     Ybot = (float) yVal/40;
+//     int8_t thVal = (int8_t) Serial.read();
+//     THbot = (float) (thVal*M_PI)/127+M_PI;
+
+//     int8_t xdVal = (int8_t) Serial.read();
+//     Xdbot = (float) xdVal*16/1000;
+//     int8_t ydVal = (int8_t) Serial.read();
+//     Ydbot = (float) ydVal*16/1000;
+//     int8_t thdVal = (int8_t) Serial.read();
+//     THdbot = (float) (thdVal*64)/1000;
+//   }
+ 
+//   // Reference angle based
+//   X = R * cos(th*DEG_TO_RAD);
+//   Y = R * sin(th*DEG_TO_RAD);
+
+//   float Rref = sqrt(X*X + Y*Y);
+//   float PHIref = atan2(Y,X);
+
+//   float Xbot_c = Xbot - Xref;
+//   float Ybot_c = Ybot - Yref;
+
+//   float Rbot = sqrt(Xbot_c*Xbot_c + Ybot_c*Ybot_c);
+//   float PHIbot = atan2(Ybot_c,Xbot_c);
+
+//   // Calculate polar errors
+//   float eR = Rref - Rbot;
+//   float ePHI = PHIref - PHIbot;
+
+//   PHIbot = fmod(2*M_PI + fmod(PHIbot, 2*M_PI), 2*M_PI);  
+
+//   // Shortest angle
+//   if (ePHI > M_PI) {
+//     ePHI -= 2*M_PI;
+//   } else if (ePHI < -M_PI) {
+//     ePHI += 2*M_PI;
+//   }
+
+//   float KpPHI_ePHI = max(min(KpPHI * ePHI, M_PI/2), -M_PI/2);//5),-5);//M_PI/2), -M_PI/2);
+//   // float KpPHI_ePHI = KpPHI * ePHI;
+
+//   float deltaX = KpR * eR * cos(PHIbot) - KpPHI_ePHI * sin(PHIbot);
+//   float deltaY = KpR * eR * sin(PHIbot) + KpPHI_ePHI * cos(PHIbot);
+
+//   float eX = -(deltaY * cos(THbot) - deltaX * sin(THbot));
+//   float eY = (deltaY * sin(THbot) + deltaX * cos(THbot));
+
+
+//   float Rdbot   =  Xdbot * cos(PHIbot) + Ydbot * sin(PHIbot);
+//   float PHIdbot = -Xdbot * sin(PHIbot) + Ydbot * cos(PHIbot);
+
+//   float deltaXd = KdR * Rdbot * cos(PHIbot) - KdPHI * PHIdbot * sin(PHIbot);
+//   float deltaYd = KdR * Rdbot * sin(PHIbot) + KdPHI * PHIdbot * cos(PHIbot);
+
+//   float eXd = -(deltaYd * cos(THbot) - deltaXd * sin(THbot));
+//   float eYd = (deltaYd * sin(THbot) + deltaXd * cos(THbot));
+
+//   // Angle error
+//   // float eTH = th*DEG_TO_RAD - THbot;
+//   float eTH = PHIbot - THbot;
+  
+//   // Shortest angle
+//   if (eTH > M_PI) {
+//     eTH -= 2*M_PI;
+//   } else if (eTH < -M_PI) {
+//     eTH += 2*M_PI;
+//   }
+// }
+
+// void IMU::controlOutput() {
+
+//   uX = eX + eXd;// - R*(gyroZ*DEG_TO_RAD);
+//   uX = max(min(uX,2),-2);
+//   uY = eY + eYd;
+//   uY = max(min(uY,2),-2);
+//   uTH = KpTH * eTH + KdTH * THdbot;// + gyroZ*DEG_TO_RAD;
+//   uTH = max(min(uTH,8),-8);
+
+//   #ifdef DEBUG
+//     outputValues(t);
+//   #else
+//     // messenger.update(0,(R*(gyroZ*DEG_TO_RAD))*32767/2);
+//     messenger.update(0, uX*32767/2);
+//     delay(1);
+//     // messenger.update(1,0);
+//     messenger.update(1, uY*32767/2);
+//     delay(1);
+//     messenger.update(2, uTH*32767/8);
+//     delay(1);
+//   #endif
+
+//   t_prev = t;
+
+// }
