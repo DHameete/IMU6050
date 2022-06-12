@@ -3,7 +3,7 @@
 
 IMU::IMU(){}
 
-IMU::~IMU() {}
+IMU::~IMU(){}
 
 void IMU::init() {
 
@@ -187,9 +187,9 @@ void IMU::outputValues(unsigned long t) {
   Serial.print(vel[1]);
 
   Serial.print(",");
-  Serial.print(Xref);
+  Serial.print(pos[0]);
   Serial.print(",");
-  Serial.print(Yref);
+  Serial.print(pos[1]);
   
   Serial.print(",");
   Serial.print(gyro[2]*DEG_TO_RAD);
@@ -201,8 +201,6 @@ void IMU::outputValues(unsigned long t) {
   // logger[i] = *pointer_to_value_i
 
 }
-
-
 
 void IMU::zeroAcc() {
 
@@ -229,127 +227,24 @@ void IMU::zeroAcc() {
   b_indx = (b_indx % b_len);
 }
 
-
-void IMU::calculateDerivative() {
-
-  calcVelocity();
-  calcPosition();
-  calcAngle();
-
-}
-
-
 void IMU::update(unsigned long t) {
   
   dt = t - t_prev;
 
   getValues();
+  
   filterAccGyr();
-
   expMovAvg();
-  calculateDerivative();
+  
+  calcVelocity();
+  calcPosition();
+  calcAngle();
 
   zeroAcc();
 
-  getRobotState();
-  calculateError();
-  controlOutput(t);
-}
-
-void IMU::getRobotState() {
-
-  while(Serial.available()){
-    int8_t xVal = (int8_t) Serial.read();
-    Xbot = (float) xVal/40;
-    int8_t yVal = (int8_t) Serial.read();
-    Ybot = (float) yVal/40;
-    int8_t thVal = (int8_t) Serial.read();
-    THbot = (float) (thVal*M_PI)/127+M_PI;
-
-    int8_t xdVal = (int8_t) Serial.read();
-    Xdbot = (float) xdVal*16/1000;
-    int8_t ydVal = (int8_t) Serial.read();
-    Ydbot = (float) ydVal*16/1000;
-    int8_t thdVal = (int8_t) Serial.read();
-    THdbot = (float) (thdVal*64)/1000;
-  }
-
-}
-
-void IMU::calculateError() {
-
-  float Xbot_c = Xbot - Xbot_ref;
-  float Ybot_c = Ybot - Ybot_ref;
-
-  Rbot = sqrt(Xbot_c*Xbot_c + Ybot_c*Ybot_c);
-  PHIbot = atan2(Ybot_c, Xbot_c);
-  PHIbot = fmod(2*M_PI + fmod(PHIbot, 2*M_PI), 2*M_PI);  
-
-  Rdbot   =  Xdbot * cos(PHIbot) + Ydbot * sin(PHIbot);
-  PHIdbot = -Xdbot * sin(PHIbot) + Ydbot * cos(PHIbot);
-
-  // Calculate polar errors
-  eR = R - Rbot;
-  ePHI = ang[2]*DEG_TO_RAD - PHIbot;
-
-  // Shortest angle
-  if (ePHI > M_PI) {
-    ePHI -= 2*M_PI;
-  } else if (ePHI < -M_PI) {
-    ePHI += 2*M_PI;
-  }
-
-  // Angle error
-  eTH = PHIbot - THbot;
-  
-  // Shortest angle
-  if (eTH > M_PI) {
-    eTH -= 2*M_PI;
-  } else if (eTH < -M_PI) {
-    eTH += 2*M_PI;
-  }
-
-}
-
-void IMU::controlOutput(unsigned long t) {
-
-  float KpPHI_ePHI = max(min(KpPHI * ePHI, M_PI/2), -M_PI/2);//5),-5);//M_PI/2), -M_PI/2);
-
-  float deltaX = KpR * eR * cos(PHIbot) - KpPHI_ePHI * sin(PHIbot);
-  float deltaY = KpR * eR * sin(PHIbot) + KpPHI_ePHI * cos(PHIbot);
-
-  float deltaXd = KdR * Rdbot * cos(PHIbot) - KdPHI * PHIdbot * sin(PHIbot);
-  float deltaYd = KdR * Rdbot * sin(PHIbot) + KdPHI * PHIdbot * cos(PHIbot);
-
-  float uX = -(deltaY * cos(THbot) - deltaX * sin(THbot));
-  float uY = (deltaY * sin(THbot) + deltaX * cos(THbot));
-
-  float uXd = -(deltaYd * cos(THbot) - deltaXd * sin(THbot));
-  float uYd = (deltaYd * sin(THbot) + deltaXd * cos(THbot));
-
-  float uTH = KpTH * eTH;
-  float uTHd = KdTH * THdbot;
-
-  u[0] = uX + uXd;// - R*(gyroZ*DEG_TO_RAD);
-  u[0] = max(min(u[0],2),-2);
-  u[1] = uY + uYd;
-  u[1] = max(min(u[1],2),-2);
-  u[2] = uTH + uTHd;// + gyroZ*DEG_TO_RAD;
-  u[2] = max(min(u[2],8),-8);
-
   #ifdef DEBUG
     outputValues(t);
-  #else
-    // messenger.update(0,(R*(gyroZ*DEG_TO_RAD))*32767/2);
-    messenger.update(0, uX*32767/2);
-    delay(1);
-    // messenger.update(1,0);
-    messenger.update(1, uY*32767/2);
-    delay(1);
-    messenger.update(2, uTH*32767/8);
-    delay(1);
   #endif
 
   t_prev = t;
-
 }

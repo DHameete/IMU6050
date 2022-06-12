@@ -1,10 +1,11 @@
 #include <Wire.h>
 #include "src/IMU.hpp"
+#include "src/Controller.hpp"
 
 unsigned long t;
 
 IMU Imu;
-
+Controller Ctrl;
  
 void setup() {
   
@@ -23,6 +24,7 @@ void loop() {
   t = millis();
 
   Imu.update(t);
+  Ctrl.update(Imu.pos, Imu.ang);
   delay(1);
 
 }
