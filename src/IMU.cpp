@@ -26,15 +26,24 @@ void IMU::init() {
   aRes = mpu.getAres();
   gRes = mpu.getGres();
 
+  initOffset();
+
+}
+
+void IMU::initOffset() {
+
+  // Get and calculate average offset
   uint16_t n = 1;
-  while(n < 3000) {
+  while(n < N_OFF) {
 
     getValues();
     
-    accOff[0] += (arrRaw[0] - accOff[0]) / n;
-    accOff[1] += (arrRaw[1] - accOff[1]) / n;
-    accOff[2] += (arrRaw[2] - accOff[2]) / n;
+    // Calculate acceleration offset
+    accOff[0] += (accRaw[0] - accOff[0]) / n;
+    accOff[1] += (accRaw[1] - accOff[1]) / n;
+    accOff[2] += (accRaw[2] - accOff[2]) / n;
 
+    // Calculate gyro offset
     gyroOff[0] += (gyro[0] - gyroOff[0]) / n;
     gyroOff[1] += (gyro[1] - gyroOff[1]) / n;
     gyroOff[2] += (gyro[2] - gyroOff[2]) / n;
@@ -65,65 +74,92 @@ void IMU::getValues() {
     gyroRaw[1] =   (float) gyroCount[1]*gRes;  
     gyroRaw[2] = -((float) gyroCount[0]*gRes);  
 
+    // Get and calculate temperature
     tempCount = mpu.readTempData();  // Read the x/y/z adc values
     temperature = ((float) tempCount) / 340. + 36.53; // Temperature in degrees Centigrade
   }
-
 }
 
-void IMU::calcVelocity(float* prevAcc, float acc, float* vel) {
+void IMU::filterAccGyr() {
 
-  float sumdiff = 0.0F;
-  for (uint8_t i = 0; i < c_len; i++) {
-    sumdiff += abs(prevAcc[i] - prevAcc[i-1]);
-  }
-  
-  // *vel = *vel + acc * dt / 1000; // ms to s
-  if (sumdiff < VEL_FILTER && abs(acc) < 1000*VEL_FILTER) {
-    *vel = 0;
-  } else {
-    *vel = *vel + acc * dt / 1000; // ms to s
+  // Center and filter acceleration
+  for (uint8_t ii = 0; ii < 3; ii++) {
+    acc[ii] = accRaw[ii] * (abs(accRaw[ii]) > ACC_FILTER) - accOff[ii];
+    gyro[ii] = gyroRaw[ii] * (abs(gyroRaw[ii]) > GYRO_FILTER) - gyroOff[ii];
   }
 }
 
+void IMU::expMovAvg() {
 
-void IMU::calcPosition(float* prevVel, float vel, float* pos) {
-
-  for (uint8_t i = 0; i < v_len-1; i++) {
-    prevVel[i] = prevVel[i+1];
-  }
-  prevVel[v_len-1] = vel;
-
-  float sumVel = 0.0F;
-  for (uint8_t i = 0; i < v_len; i++){
-    sumVel += prevVel[i];
-  }
-  sumVel /= v_len;
-  if (abs(sumVel) < OUTPUT_FILTER){
-    return;
-  } else {
-    *pos = *pos + vel * dt / 1000;
+  // Average accelerations
+  for (uint8_t ii = 0; ii < 3; ii++) {
+    accAccum[ii] = (alpha * acc[ii]) + (1 - alpha) * accAccum[ii];
+    acc[ii] = accAccum[ii];
   }
 }
 
-void IMU::calcAngle(float* prevVel, float vel, float* angle) {
+void IMU::calcVelocity() {
 
-  for (uint8_t i = 0; i < c_len-1; i++) {
-    prevVel[i] = prevVel[i+1];
+  for (uint8_t ii = 0; ii < 3; ii++) {
+    float sumdiff = 0.0F;
+    for (uint8_t jj = 0; jj < c_len; jj++) {
+      sumdiff += abs(prevAcc[ii][jj] - prevAcc[ii][jj-1]);
+    }
+    
+    // *vel = *vel + acc * dt / 1000; // ms to s
+    if (sumdiff < VEL_FILTER && abs(acc[ii]) < 1000*VEL_FILTER) {
+      vel[ii] = 0;
+    } else {
+      vel[ii] = vel[ii] + acc[ii] * dt / 1000; // ms to s
+    }
   }
-  prevVel[c_len-1] = vel;
+}
 
-  float sumdiff = 0.0F;
-  for (uint8_t i = 0; i < c_len; i++) {
-    sumdiff += abs(prevVel[i] - prevVel[i-1]);
+
+void IMU::calcPosition() {
+
+  for (uint8_t ii = 0; ii < 3; ii++) {
+
+    for (uint8_t jj = 0; jj < v_len-1; jj++) {
+      prevVel[ii][jj] = prevVel[ii][jj+1];
+    }
+    prevVel[ii][v_len-1] = vel[ii];
+
+    float sumVel = 0.0F;
+    for (uint8_t kk = 0; kk < v_len; kk++){
+      sumVel += prevVel[ii][kk];
+    }
+    sumVel /= v_len;
+
+    if (abs(sumVel) < OUTPUT_FILTER){
+      return;
+    } else {
+      pos[ii] = pos[ii] + vel[ii] * dt / 1000;
+    }
   }
-  
-  if (sumdiff < 0.01) {
-    return;
-  } else {
-    *angle = *angle + vel * dt / 1000; // ms to s
+}
+
+void IMU::calcAngle() {
+
+  for (uint8_t ii = 0; ii < 3; ii++) {
+
+    for (uint8_t jj = 0; jj < c_len-1; jj++) {
+      prevGyro[ii][jj] = prevGyro[ii][jj+1];
+    }
+    prevGyro[ii][c_len-1] = gyro[ii];
+
+    float sumdiff = 0.0F;
+    for (uint8_t kk = 0; kk < c_len; kk++) {
+      sumdiff += abs(prevGyro[ii][kk] - prevGyro[ii][kk-1]);
+    }
+    
+    if (sumdiff < 0.01) {
+      return;
+    } else {
+      ang[ii] = ang[ii] + gyro[ii] * dt / 1000; // ms to s
+    }
+    ang[ii] = fmod(360 + fmod(ang[ii], 360), 360);
   }
-  *angle = fmod(360 + fmod(*angle, 360), 360);
 }
 
 void IMU::outputValues(unsigned long t) {
@@ -166,76 +202,39 @@ void IMU::outputValues(unsigned long t) {
 
 }
 
-void IMU::filterAccel() {
-  // Center and filter acceleration
-  
-  // X
-  accX = accXraw * (abs(accXraw) > ACC_FILTER) - accOff[2];
- 
-  // Y
-  accY = accYraw * (abs(accYraw) > ACC_FILTER) - accOff[1];
-
-  // Z
-  accZ = accZraw * (abs(accZraw) > ACC_FILTER) - accOff[0];
-
-}
 
 
-void IMU::zeroingAccel(float* biasAcc, float* acc, uint8_t ind) {
+void IMU::zeroAcc() {
 
-  // Remove oldest value
-  // sumBiasAcc -= biasAcc[b_indx];
+  for (uint8_t ii = 0; ii < 3; ii++) {
+    // Add newest value
+    biasAcc[ii][b_indx] = acc[ii];
 
-  // Add newest value
-  biasAcc[b_indx] = *acc;
-  // sumBiasAcc += biasAcc[b_indx];
+    // Calculate sum of differences
+    float sumdiff = 0.0F;
+    float sumBiasAcc = biasAcc[ii][0];
+    for (uint8_t jj = 1; jj < b_len; jj++) {
+      sumdiff += abs(biasAcc[ii][jj] - biasAcc[ii][jj-1]);
+      sumBiasAcc += biasAcc[ii][jj];
+    }
 
-  // Calculate sum of differences
-  float sumdiff = 0.0F;
-  float sumBiasAcc = biasAcc[0];
-  for (uint8_t i = 1; i < b_len; i++) {
-    sumdiff += abs(biasAcc[i] - biasAcc[i-1]);
-    sumBiasAcc += biasAcc[i];
+    // Calculate bias
+    if (sumdiff < 6){
+      accOff[ii] = (sumBiasAcc / b_len);
+    }
   }
 
-  // Calculate bias
-  if (sumdiff < 6){
-    accOff[ind] = (sumBiasAcc / b_len);
-  }
-
+  // Increase index
+  b_indx++;
+  b_indx = (b_indx % b_len);
 }
 
-void IMU::movingAverage_exponential(float* accum, float* acc) {
-
-  // Average accelerations
-  *accum = (alpha * *acc) + (1 - alpha) * *accum;
-  *acc = *accum;
-}
-
-
-
-void IMU::filterGyro() {
-  // Center and filter velocity
-
-  // Pitch
-  gyro[0] *= (abs(gyro[0]]) > GYRO_FILTER);
-  
-  // Roll
-  gyro[1] *= (abs(gyro[1]) > GYRO_FILTER);
-
-  // Yaw
-  gyroZ[2] *= (abs(gyro[2]) > GYRO_FILTER);
-
-}
 
 void IMU::calculateDerivative() {
 
-  calcVelocity(prevAccXflt, acc[0], &velX);
-  calcPosition(prevVelX, velX, &Xref);
-  calcVelocity(prevAccYflt, accY, &velY);
-  calcPosition(prevVelY, velY, &Yref);
-
-  calcAngle(prevGyroZ, gyroZ, &th);
+  calcVelocity();
+  calcPosition();
+  calcAngle();
 
 }
 
@@ -245,126 +244,112 @@ void IMU::update(unsigned long t) {
   dt = t - t_prev;
 
   getValues();
+  filterAccGyr();
 
-  filterAccel();
-  filterGyro();
-
-  movingAverage_exponential(&accAccum, acc[0]);
-  movingAverage_exponential(&accYaccumulator, acc[1]);
-  movingAverage_exponential(&accZaccumulator, acc[2]);
-
+  expMovAvg();
   calculateDerivative();
 
-  zeroingAccel(biasAccX, acc[0], 2);
-  zeroingAccel(biasAccY, acc[1], 1);
-  zeroingAccel(biasAccZ, acc[2], 0);
+  zeroAcc();
 
-
-  // Increase index
-  b_indx++;
-  b_indx = (b_indx % b_len);
-
-  calculateReference();
-  controlOutput();
+  getRobotState();
+  calculateError();
+  controlOutput(t);
 }
 
-// void IMU::calculateReference() {}
+void IMU::getRobotState() {
 
-//   while(Serial.available()){
-//     int8_t xVal = (int8_t) Serial.read();
-//     Xbot = (float) xVal/40;
-//     int8_t yVal = (int8_t) Serial.read();
-//     Ybot = (float) yVal/40;
-//     int8_t thVal = (int8_t) Serial.read();
-//     THbot = (float) (thVal*M_PI)/127+M_PI;
+  while(Serial.available()){
+    int8_t xVal = (int8_t) Serial.read();
+    Xbot = (float) xVal/40;
+    int8_t yVal = (int8_t) Serial.read();
+    Ybot = (float) yVal/40;
+    int8_t thVal = (int8_t) Serial.read();
+    THbot = (float) (thVal*M_PI)/127+M_PI;
 
-//     int8_t xdVal = (int8_t) Serial.read();
-//     Xdbot = (float) xdVal*16/1000;
-//     int8_t ydVal = (int8_t) Serial.read();
-//     Ydbot = (float) ydVal*16/1000;
-//     int8_t thdVal = (int8_t) Serial.read();
-//     THdbot = (float) (thdVal*64)/1000;
-//   }
- 
-//   // Reference angle based
-//   X = R * cos(th*DEG_TO_RAD);
-//   Y = R * sin(th*DEG_TO_RAD);
+    int8_t xdVal = (int8_t) Serial.read();
+    Xdbot = (float) xdVal*16/1000;
+    int8_t ydVal = (int8_t) Serial.read();
+    Ydbot = (float) ydVal*16/1000;
+    int8_t thdVal = (int8_t) Serial.read();
+    THdbot = (float) (thdVal*64)/1000;
+  }
 
-//   float Rref = sqrt(X*X + Y*Y);
-//   float PHIref = atan2(Y,X);
+}
 
-//   float Xbot_c = Xbot - Xref;
-//   float Ybot_c = Ybot - Yref;
+void IMU::calculateError() {
 
-//   float Rbot = sqrt(Xbot_c*Xbot_c + Ybot_c*Ybot_c);
-//   float PHIbot = atan2(Ybot_c,Xbot_c);
+  float Xbot_c = Xbot - Xbot_ref;
+  float Ybot_c = Ybot - Ybot_ref;
 
-//   // Calculate polar errors
-//   float eR = Rref - Rbot;
-//   float ePHI = PHIref - PHIbot;
+  Rbot = sqrt(Xbot_c*Xbot_c + Ybot_c*Ybot_c);
+  PHIbot = atan2(Ybot_c, Xbot_c);
+  PHIbot = fmod(2*M_PI + fmod(PHIbot, 2*M_PI), 2*M_PI);  
 
-//   PHIbot = fmod(2*M_PI + fmod(PHIbot, 2*M_PI), 2*M_PI);  
+  Rdbot   =  Xdbot * cos(PHIbot) + Ydbot * sin(PHIbot);
+  PHIdbot = -Xdbot * sin(PHIbot) + Ydbot * cos(PHIbot);
 
-//   // Shortest angle
-//   if (ePHI > M_PI) {
-//     ePHI -= 2*M_PI;
-//   } else if (ePHI < -M_PI) {
-//     ePHI += 2*M_PI;
-//   }
+  // Calculate polar errors
+  eR = R - Rbot;
+  ePHI = ang[2]*DEG_TO_RAD - PHIbot;
 
-//   float KpPHI_ePHI = max(min(KpPHI * ePHI, M_PI/2), -M_PI/2);//5),-5);//M_PI/2), -M_PI/2);
-//   // float KpPHI_ePHI = KpPHI * ePHI;
+  // Shortest angle
+  if (ePHI > M_PI) {
+    ePHI -= 2*M_PI;
+  } else if (ePHI < -M_PI) {
+    ePHI += 2*M_PI;
+  }
 
-//   float deltaX = KpR * eR * cos(PHIbot) - KpPHI_ePHI * sin(PHIbot);
-//   float deltaY = KpR * eR * sin(PHIbot) + KpPHI_ePHI * cos(PHIbot);
-
-//   float eX = -(deltaY * cos(THbot) - deltaX * sin(THbot));
-//   float eY = (deltaY * sin(THbot) + deltaX * cos(THbot));
-
-
-//   float Rdbot   =  Xdbot * cos(PHIbot) + Ydbot * sin(PHIbot);
-//   float PHIdbot = -Xdbot * sin(PHIbot) + Ydbot * cos(PHIbot);
-
-//   float deltaXd = KdR * Rdbot * cos(PHIbot) - KdPHI * PHIdbot * sin(PHIbot);
-//   float deltaYd = KdR * Rdbot * sin(PHIbot) + KdPHI * PHIdbot * cos(PHIbot);
-
-//   float eXd = -(deltaYd * cos(THbot) - deltaXd * sin(THbot));
-//   float eYd = (deltaYd * sin(THbot) + deltaXd * cos(THbot));
-
-//   // Angle error
-//   // float eTH = th*DEG_TO_RAD - THbot;
-//   float eTH = PHIbot - THbot;
+  // Angle error
+  eTH = PHIbot - THbot;
   
-//   // Shortest angle
-//   if (eTH > M_PI) {
-//     eTH -= 2*M_PI;
-//   } else if (eTH < -M_PI) {
-//     eTH += 2*M_PI;
-//   }
-// }
+  // Shortest angle
+  if (eTH > M_PI) {
+    eTH -= 2*M_PI;
+  } else if (eTH < -M_PI) {
+    eTH += 2*M_PI;
+  }
 
-// void IMU::controlOutput() {
+}
 
-//   uX = eX + eXd;// - R*(gyroZ*DEG_TO_RAD);
-//   uX = max(min(uX,2),-2);
-//   uY = eY + eYd;
-//   uY = max(min(uY,2),-2);
-//   uTH = KpTH * eTH + KdTH * THdbot;// + gyroZ*DEG_TO_RAD;
-//   uTH = max(min(uTH,8),-8);
+void IMU::controlOutput(unsigned long t) {
 
-//   #ifdef DEBUG
-//     outputValues(t);
-//   #else
-//     // messenger.update(0,(R*(gyroZ*DEG_TO_RAD))*32767/2);
-//     messenger.update(0, uX*32767/2);
-//     delay(1);
-//     // messenger.update(1,0);
-//     messenger.update(1, uY*32767/2);
-//     delay(1);
-//     messenger.update(2, uTH*32767/8);
-//     delay(1);
-//   #endif
+  float KpPHI_ePHI = max(min(KpPHI * ePHI, M_PI/2), -M_PI/2);//5),-5);//M_PI/2), -M_PI/2);
 
-//   t_prev = t;
+  float deltaX = KpR * eR * cos(PHIbot) - KpPHI_ePHI * sin(PHIbot);
+  float deltaY = KpR * eR * sin(PHIbot) + KpPHI_ePHI * cos(PHIbot);
 
-// }
+  float deltaXd = KdR * Rdbot * cos(PHIbot) - KdPHI * PHIdbot * sin(PHIbot);
+  float deltaYd = KdR * Rdbot * sin(PHIbot) + KdPHI * PHIdbot * cos(PHIbot);
+
+  float uX = -(deltaY * cos(THbot) - deltaX * sin(THbot));
+  float uY = (deltaY * sin(THbot) + deltaX * cos(THbot));
+
+  float uXd = -(deltaYd * cos(THbot) - deltaXd * sin(THbot));
+  float uYd = (deltaYd * sin(THbot) + deltaXd * cos(THbot));
+
+  float uTH = KpTH * eTH;
+  float uTHd = KdTH * THdbot;
+
+  u[0] = uX + uXd;// - R*(gyroZ*DEG_TO_RAD);
+  u[0] = max(min(u[0],2),-2);
+  u[1] = uY + uYd;
+  u[1] = max(min(u[1],2),-2);
+  u[2] = uTH + uTHd;// + gyroZ*DEG_TO_RAD;
+  u[2] = max(min(u[2],8),-8);
+
+  #ifdef DEBUG
+    outputValues(t);
+  #else
+    // messenger.update(0,(R*(gyroZ*DEG_TO_RAD))*32767/2);
+    messenger.update(0, uX*32767/2);
+    delay(1);
+    // messenger.update(1,0);
+    messenger.update(1, uY*32767/2);
+    delay(1);
+    messenger.update(2, uTH*32767/8);
+    delay(1);
+  #endif
+
+  t_prev = t;
+
+}

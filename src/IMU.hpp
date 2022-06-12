@@ -33,48 +33,39 @@ private:
 
     float accRaw[3] = { 0.0F };
     float gyroRaw[3] = { 0.0F };
+    float temp = 0.0;
 
-    float gyro[3] = { 0.0F };
     float acc[3] = { 0.0F };
+    float gyro[3] = { 0.0F };
 
-    float temp;
+    float accAccum[3] = { 0.0F };
 
     float vel[3] = { 0.0F };
     float ang[3] = { 0.0F };
 
+    float pos[3] = { 0.0F };
+
+
+    float N_OFF = 3000;
+    float ACC_FILTER = 0.0;
     float GYRO_FILTER = 3;
     float VEL_FILTER = 0.0001; //TODO: make moving average more smooth?!!
     float OUTPUT_FILTER = 0.003;
     float alpha = 0.01;
 
     
-    float prevAccX[c_len] = { 0.0F };
-    float prevAccY[c_len] = { 0.0F };
-    float prevGyroZ[c_len] = { 0.0F };
-
-    float accAccum[3] = { 0.0F };
-
-    float prevAccXflt[c_len] = { 0.0F };
-    float prevAccYflt[c_len] = { 0.0F };
-        
+    float prevAcc[3][c_len] = {{ 0.0F }};
+    float prevGyro[3][c_len] = {{ 0.0F }};
     
-    float prevVelX[v_len] = { 0.0F };
-    float prevVelY[v_len] = { 0.0F };
+    float prevVel[3][v_len] = {{ 0.0F }};
 
     int b_indx = 0;
-    float biasAccX[b_len] = { 0.0F };
-    float biasAccY[b_len] = { 0.0F };
-    float biasAccZ[b_len] = { 0.0F };
+    float biasAcc[3][b_len] = {{ 0.0F }};
 
-
-    float outX = 0.0F;
-    float outY = 0.0F;
-    float outTh = 0.0F;
-    
     float R = 1.0F;
 
-    float X = R;
-    float Y = 0.0F;
+    float Xref = R;
+    float Yref = 0.0F;
 
     float Xbot = R;
     float Ybot = 0.0F;
@@ -84,9 +75,7 @@ private:
     float Ydbot = 0.0F;
     float THdbot = 0.0F;
 
-    float uX = 0.0F;
-    float uY = 0.0F;
-    float uTH = 0.0F;
+    float u[3] = { 0.0F };
     
     // Controller parameters
     float KpR = 0.5*5.0F;//3.0F;//5.0F;
@@ -97,33 +86,42 @@ private:
     float KdPHI = -2.0F;
     float KdTH = -0.5F;
 
-    float Xref = 0.0F;
-    float Yref = 0.0F;
+    float Xbot_ref = R;
+    float Ybot_ref = 0.0F;
 
-    float accumulator = 0.0F;
+    float eR = 0.0F;
+    float ePHI = 0.0F;
+    float eTH = 0.0F;
+
+    float PHIbot = 0.0F;
+    float PHIdbot = 0.0F;
+
+    float Rbot = 0.0F;
+    float Rdbot = 0.0F;
+
+    MessageHandler messenger = MessageHandler();
+    
 
     void getValues();
 
-    void filterAccel();
-    void filterGyro();
+    void initOffset();
+    void filterAccGyr();
 
-    void zeroingAccel(float* biasAcc, float* acc, uint8_t ind);
+    void expMovAvg();
+
+    void zeroAcc();
 
     void calculateDerivative();
-    void movingAverage(float* prevAcc, float* acc);
-    void movingAverage_exponential(float* prevAcc, float* acc);
-
-    void calcVelocity(float* prevAcc, float acc, float* vel);
-    void calcAngle(float* prevStates, float vel, float* angle);
-
-
-    void calcPosition(float* prevVel, float vel, float* out);
+    
+    void calcVelocity();
+    void calcPosition();
+    void calcAngle();
+    
+    void getRobotState();
+    void calculateError();
+    void controlOutput(unsigned long t);
     
     void outputValues(unsigned long t);
-
-    MessageHandler messenger = MessageHandler();
-
-
 
 };
 
