@@ -4,7 +4,7 @@
 
 /* Debug prints uncomment to print debug information
  */
-#define DEBUG
+// #define DEBUG
 
 #define c_len  10
 #define v_len   3

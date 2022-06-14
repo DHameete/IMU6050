@@ -194,7 +194,7 @@ void IMU::outputValues(unsigned long t) {
   Serial.print(",");
   Serial.print(gyro[2]*DEG_TO_RAD);
   Serial.print(",");
-  Serial.print(ang[2]*DEG_TO_RAD);
+  Serial.println(ang[2]*DEG_TO_RAD);
 
   // for i = 1:10:
   //   Serial.print(logger[i]);
@@ -206,7 +206,7 @@ void IMU::zeroAcc() {
 
   for (uint8_t ii = 0; ii < 3; ii++) {
     // Add newest value
-    biasAcc[ii][b_indx] = acc[ii];
+    biasAcc[ii][b_indx] = accRaw[ii];
 
     // Calculate sum of differences
     float sumdiff = 0.0F;
