@@ -243,7 +243,7 @@ void IMU::update(unsigned long t) {
   zeroAcc();
 
   #ifdef DEBUG
-    outputValues(t);
+    // outputValues(t);
   #endif
 
   t_prev = t;

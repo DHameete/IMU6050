@@ -2,11 +2,14 @@
 #include "src/IMU.hpp"
 #include "src/Controller.hpp"
 #include "src/DistanceHandler.hpp"
+#include "src/ObserverHandler.hpp"
 
 unsigned long t;
+unsigned long t_prev;
 
 IMU Imu;
-DistanceHandler distanceSensors;
+DistanceHandler DistanceSensors;
+ObserverHandler Observer;
 Controller Ctrl;
  
 void setup() {
@@ -18,18 +21,36 @@ void setup() {
   digitalWrite(LED_BUILTIN, HIGH);
   
   Imu.init();
-  distanceSensors.init();
-  distanceSensors.startContinuous();
+  DistanceSensors.init();
+  DistanceSensors.startContinuous();
+
+  Observer.init();
 
   digitalWrite(LED_BUILTIN, LOW);
+  t_prev = millis() - 4;
 }
 
 void loop() {
   
-  t = millis();
 
   Imu.update(t);
-  distanceSensors.update();
+  DistanceSensors.update();
+
+  t = millis();
+  float dt = (t - t_prev)/1000;
+  float pBot[2] = {0, 0};
+  float dist[2] = {DistanceSensors.avgDisX, DistanceSensors.avgDisY};
+
+  Serial.print(Imu.ang[2]);
+  Serial.print(", ");
+  Serial.print(Imu.gyro[2]);
+  Serial.print(" || ");
+
+  Observer.update(dt, Imu.acc, Imu.vel, Imu.gyro, Imu.ang, pBot, dist);
+
+  Serial.println(dt);
+  t_prev = t;
+
   Ctrl.update(Imu.pos, Imu.ang);
   delay(1);
 
