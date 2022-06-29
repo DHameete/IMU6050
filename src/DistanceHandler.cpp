@@ -25,25 +25,21 @@ void DistanceHandler::update() {
   
   calcLine();
 
-  #ifdef DEBUG
-    // print();
-  // #else
-  //   messenger.update(0, controller.valueX);
-  //   delay(1);
-  //   messenger.update(1, controller.valueY);
-  //   delay(1);
-  //   // messenger.update(2, controller.valueAng);
-  //   // delay(1);
-  #endif
-  
+  #ifdef DEBUG_TOF
+    print();
+  #endif 
 
 }
 
 void DistanceHandler::calcLine() {
 
-  ang = (sensorRight.ang + sensorLeft.ang) / 2;
-  avgDisX = (int16_t) ((sensorRight.avgDis - sensorLeft.avgDis) / (tan(sensorLeft.ang) - tan(sensorRight.ang)));
-  avgDisY = (uint16_t) (tan(sensorLeft.ang) * avgDisX + sensorLeft.avgDis);
+  // ang = (sensorRight.ang + sensorLeft.ang) / 2;
+  // avgDisX = (int16_t) ((sensorRight.avgDis - sensorLeft.avgDis) / (tan(sensorLeft.ang) - tan(sensorRight.ang)));
+  // avgDisY = (uint16_t) (tan(sensorLeft.ang) * avgDisX + sensorLeft.avgDis);
+
+  ang = sensorLeft.ang;
+  avgDisX = (float) (0);
+  avgDisY = (float) (tan(sensorLeft.ang) * avgDisX + sensorLeft.avgDis);
 
 }
 

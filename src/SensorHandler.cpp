@@ -61,40 +61,23 @@ void SensorHandler::startContinuous() {
 
 }
 
-void SensorHandler::calcLine() {
+void SensorHandler::read() {
+  // Check for new data
+  if(distanceSensor.dataReady()) {
+    // Read new distance 
+    _distanceRaw[_zone] = (float)distanceSensor.read(false) / 1000;
 
-  int16_t x[num];
-  int16_t y[num];
+    // Set next ROI center
+    _zone++;
+    _zone = _zone % num;
+    distanceSensor.setROICenter(_center[_zone]);
 
-  int16_t x_avg = 0;
-  int16_t y_avg = 0;
-
-  // Calculating x,y-values
-  for(uint8_t r = 0; r < num; r++)
-  {
-    x[r] = (int16_t) distance[r] * cos((90 - (r * 4.5 - 13.5)) * M_PI / 180);
-    y[r] = (int16_t) distance[r] * sin((90 - (r * 4.5 - 13.5)) * M_PI / 180);
-
-    x_avg += x[r];
-    y_avg += y[r];
-  }
-  x_avg /= num;
-  x_avg += _OFFX;
-  y_avg /= num;
-
-  // Calculating distance and slope
-  ang = 0;
-  for (uint8_t i = 1; i < num; i++) {
-    if(_side == LEFT) {
-      ang += atan((double)(y[i] - y[i-1]) / (x[i] - x[i-1]));
+    // New measurements ready
+    if (_zone == 0) {
+      _flag = true;
     }
-    else {
-      ang += atan((double)(y[num-i] - y[num-i-1]) / (x[num-i] - x[num-i-1]));
-    }
-  }
 
-  ang /= (num-1);
-  avgDis = y_avg - tan(ang) * x_avg;
+  }
 }
 
 void SensorHandler::movMean() {
@@ -112,9 +95,45 @@ void SensorHandler::movMean() {
       sumMeas[j] += _measArray[i][j];
     }
     sumMeas[j] /= measLen;
-    distance[j] = (uint16_t) sumMeas[j];
+    distance[j] = sumMeas[j];
   }
 
+}
+
+void SensorHandler::calcLine() {
+
+  float x[num];
+  float y[num];
+
+  float x_avg = 0;
+  float y_avg = 0;
+
+  // Calculating x,y-values
+  for(uint8_t r = 0; r < num; r++)
+  {
+    x[r] = distance[r] * cos((90 - (r * 4.5 - 13.5)) * M_PI / 180);
+    y[r] = distance[r] * sin((90 - (r * 4.5 - 13.5)) * M_PI / 180);
+
+    x_avg += x[r];
+    y_avg += y[r];
+  }
+  x_avg /= num;
+  x_avg += _OFFX;
+  y_avg /= num;
+
+  // Calculating distance and slope
+  ang = 0;
+  for (uint8_t i = 1; i < num; i++) {
+    if(_side == LEFT) {
+      ang += atan((y[i] - y[i-1]) / (x[i] - x[i-1]));
+    }
+    else {
+      ang += atan((y[num-i] - y[num-i-1]) / (x[num-i] - x[num-i-1]));
+    }
+  }
+
+  ang /= (num-1);
+  avgDis = y_avg - tan(ang) * x_avg;
 }
 
 void SensorHandler::update() {
@@ -125,25 +144,6 @@ void SensorHandler::update() {
     movMean();
     calcLine();
     _flag = false;
-  }
-}
-
-void SensorHandler::read() {
-  // Check for new data
-  if(distanceSensor.dataReady()) {
-    // Read new distance 
-    _distanceRaw[_zone] = distanceSensor.read(false);
-
-    // Set next ROI center
-    _zone++;
-    _zone = _zone % num;
-    distanceSensor.setROICenter(_center[_zone]);
-
-    // New measurements ready
-    if (_zone == 0) {
-      _flag = true;
-    }
-
   }
 }
 

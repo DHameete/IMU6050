@@ -5,45 +5,24 @@ Controller::Controller(){}
 
 Controller::~Controller(){}
 
-void Controller::update(float *pos, float *ang) {
+void Controller::update(float *posBot, float *velBot, float *pos, float *ang) {
 
-    getRobotState();
-    calculateError(pos, ang);
-    controlOutput();
-
-}
-
-void Controller::getRobotState() {
-
-  while(Serial.available()){
-    int8_t xVal = (int8_t) Serial.read();
-    Xbot = (float) xVal/40;
-    int8_t yVal = (int8_t) Serial.read();
-    Ybot = (float) yVal/40;
-    int8_t thVal = (int8_t) Serial.read();
-    THbot = (float) (thVal*M_PI)/127+M_PI;
-
-    int8_t xdVal = (int8_t) Serial.read();
-    Xdbot = (float) xdVal*16/1000;
-    int8_t ydVal = (int8_t) Serial.read();
-    Ydbot = (float) ydVal*16/1000;
-    int8_t thdVal = (int8_t) Serial.read();
-    THdbot = (float) (thdVal*64)/1000;
-  }
+    calculateError(posBot, velBot, pos, ang);
+    controlOutput(posBot, velBot);
 
 }
 
-void Controller::calculateError(float *pos, float *ang) {
+void Controller::calculateError(float *posBot, float *velBot, float *pos, float *ang) {
 
-  float Xbot_c = Xbot - pos[0];
-  float Ybot_c = Ybot - pos[1];
+  float Xbot_c = posBot[0] - pos[0];
+  float Ybot_c = posBot[1] - pos[1];
 
   Rbot = sqrt(Xbot_c*Xbot_c + Ybot_c*Ybot_c);
   PHIbot = atan2(Ybot_c, Xbot_c);
   PHIbot = fmod(2*M_PI + fmod(PHIbot, 2*M_PI), 2*M_PI);  
 
-  Rdbot   =  Xdbot * cos(PHIbot) + Ydbot * sin(PHIbot);
-  PHIdbot = -Xdbot * sin(PHIbot) + Ydbot * cos(PHIbot);
+  Rdbot   =  velBot[0] * cos(PHIbot) + velBot[1] * sin(PHIbot);
+  PHIdbot = -velBot[0] * sin(PHIbot) + velBot[1] * cos(PHIbot);
 
   // Calculate polar errors
   eR = R - Rbot;
@@ -57,7 +36,7 @@ void Controller::calculateError(float *pos, float *ang) {
   }
 
   // Angle error
-  eTH = PHIbot - THbot;
+  eTH = PHIbot - posBot[2];
   
   // Shortest angle
   if (eTH > M_PI) {
@@ -68,7 +47,7 @@ void Controller::calculateError(float *pos, float *ang) {
 
 }
 
-void Controller::controlOutput() {
+void Controller::controlOutput(float *posBot, float *velBot) {
 
   float KpPHI_ePHI = max(min(KpPHI * ePHI, M_PI/2), -M_PI/2);//5),-5);//M_PI/2), -M_PI/2);
 
@@ -78,14 +57,14 @@ void Controller::controlOutput() {
   float deltaXd = KdR * Rdbot * cos(PHIbot) - KdPHI * PHIdbot * sin(PHIbot);
   float deltaYd = KdR * Rdbot * sin(PHIbot) + KdPHI * PHIdbot * cos(PHIbot);
 
-  float uX = -(deltaY * cos(THbot) - deltaX * sin(THbot));
-  float uY = (deltaY * sin(THbot) + deltaX * cos(THbot));
+  float uX = -(deltaY * cos(posBot[2]) - deltaX * sin(posBot[2]));
+  float uY = (deltaY * sin(posBot[2]) + deltaX * cos(posBot[2]));
 
-  float uXd = -(deltaYd * cos(THbot) - deltaXd * sin(THbot));
-  float uYd = (deltaYd * sin(THbot) + deltaXd * cos(THbot));
+  float uXd = -(deltaYd * cos(posBot[2]) - deltaXd * sin(posBot[2]));
+  float uYd = (deltaYd * sin(posBot[2]) + deltaXd * cos(posBot[2]));
 
   float uTH = KpTH * eTH;
-  float uTHd = KdTH * THdbot;
+  float uTHd = KdTH * velBot[2];
 
   u[0] = uX + uXd;// - R*(gyroZ*DEG_TO_RAD);
   u[0] = max(min(u[0],2),-2);
@@ -95,7 +74,7 @@ void Controller::controlOutput() {
   u[2] = max(min(u[2],8),-8);
 
     
-  #ifndef DEBUG
+  #ifndef DEBUG_OBS
     // messenger.update(0,(R*(gyroZ*DEG_TO_RAD))*32767/2);
     messenger.update(0, uX*32767/2);
     delay(1);

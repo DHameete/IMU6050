@@ -4,11 +4,9 @@
 
 /* Debug prints uncomment to print debug information
  */
-#define DEBUG
-
-#define c_len  10
-#define v_len   3
-#define b_len 255
+// #define DEBUG_IMU
+// #define DEBUG_TOF
+#define DEBUG_OBS
 
 /* Sensors
 */
@@ -24,11 +22,11 @@ enum SENSOR_SIDE { LEFT, RIGHT };
 
 /* X-offset of TOF sensor Left w.r.t. middle
  */
-#define OFFL -100 
+#define OFFL -0.1
 
 /* X-offset of TOF sensor Right w.r.t. middle
  */
-#define OFFR 100
+#define OFFR 0.1
 
 #endif // DEFINES_HPP
 

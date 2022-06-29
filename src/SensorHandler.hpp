@@ -27,10 +27,10 @@ public:
     static const uint8_t num = 7;
     static const uint8_t measLen = 3;
 
-    uint16_t distance[num] = {0};
+    float distance[num] = {0};
 
-    double avgDis = 0;
-    double ang = 0;
+    float avgDis = 0;
+    float ang = 0;
 
 private:
 
@@ -44,8 +44,8 @@ private:
 
     //1: {199}; 3: {167, 199, 231}; 4: {151, 183, 215, 247}; 5: {151, 183, 199, 215, 247}; 7: {151, 167, 183, 199, 215, 231, 247}; 13: {247,239,231,223,215,207,199,191,183,175,167,159,151};
     uint8_t _center[num] =  {151, 167, 183, 199, 215, 231, 247};
-    uint16_t _distanceRaw[num] = {0};  
-    uint16_t _measArray[measLen][num] = {{0}};
+    float _distanceRaw[num] = {0};  
+    float _measArray[measLen][num] = {{0}};
 
     uint8_t _zone = 0;
     bool _flag = false;

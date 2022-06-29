@@ -9,22 +9,13 @@ class Controller {
 public:
     Controller();
     ~Controller();
-    void update(float *pos, float *ang);
+    void update(float *posBot, float *velBot, float *pos, float *ang);
 
 private:
-    void getRobotState();
-    void calculateError(float *pos, float *ang);
-    void controlOutput();
+    void calculateError(float *posBot, float *velBot, float *pos, float *ang);
+    void controlOutput(float *posBot, float *velBot);
 
     float R = 1.0F;
-
-    float Xbot = R;
-    float Ybot = 0.0F;
-    float THbot = 0.0F;
-
-    float Xdbot = 0.0F;
-    float Ydbot = 0.0F;
-    float THdbot = 0.0F;
 
     float u[3] = { 0.0F };
     

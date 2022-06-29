@@ -3,14 +3,16 @@
 #include "src/Controller.hpp"
 #include "src/DistanceHandler.hpp"
 #include "src/ObserverHandler.hpp"
+#include "src/Robot.hpp"
 
-unsigned long t;
-unsigned long t_prev;
+unsigned long t1;
+unsigned long t2;
 
-IMU Imu;
+IMU imu;
 DistanceHandler DistanceSensors;
 ObserverHandler Observer;
 Controller Ctrl;
+Robot robot;
  
 void setup() {
   
@@ -20,38 +22,31 @@ void setup() {
   pinMode(LED_BUILTIN, OUTPUT);
   digitalWrite(LED_BUILTIN, HIGH);
   
-  Imu.init();
+  imu.init();
   DistanceSensors.init();
   DistanceSensors.startContinuous();
 
   Observer.init();
 
   digitalWrite(LED_BUILTIN, LOW);
-  t_prev = millis() - 4;
 }
 
 void loop() {
   
+  t1 = millis();
 
-  Imu.update(t);
+  imu.update(t1);
   DistanceSensors.update();
+  robot.update();
 
-  t = millis();
-  float dt = (t - t_prev)/1000;
-  float pBot[2] = {0, 0};
+  float pBot[3] = {robot.Xbot, robot.Ybot, robot.THbot};
+  float vBot[3] = {robot.Xdbot, robot.Ydbot, robot.THdbot};
   float dist[2] = {DistanceSensors.avgDisX, DistanceSensors.avgDisY};
 
-  Serial.print(Imu.ang[2]);
-  Serial.print(", ");
-  Serial.print(Imu.gyro[2]);
-  Serial.print(" || ");
+  t2 = millis();
+  Observer.update(t2, imu.acc, imu.vel, imu.gyro, imu.ang, pBot, dist);
 
-  Observer.update(dt, Imu.acc, Imu.vel, Imu.gyro, Imu.ang, pBot, dist);
-
-  Serial.println(dt);
-  t_prev = t;
-
-  Ctrl.update(Imu.pos, Imu.ang);
+  Ctrl.update(pBot, vBot, imu.pos, imu.ang);
   delay(1);
 
 }

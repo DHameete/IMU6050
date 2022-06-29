@@ -14,9 +14,15 @@ public:
 
     float acc[3] = { 0.0F };
     float gyro[3] = { 0.0F };
+    float gyro_deg[3] = { 0.0F };
     float vel[3] = { 0.0F };
     float ang[3] = { 0.0F };
+    float ang_deg[3] = { 0.0F };
     float pos[3] = { 0.0F };
+
+    static const uint8_t c_len =  10;
+    static const uint8_t v_len =   3;
+    static const uint8_t b_len = 255;
 
 private:
 
@@ -69,6 +75,8 @@ private:
     void calcPosition();
     void calcAngle();
     
+    void convertToRad();
+
     void outputValues(unsigned long t);
 
 };

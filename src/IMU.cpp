@@ -44,9 +44,9 @@ void IMU::initOffset() {
     accOff[2] += (accRaw[2] - accOff[2]) / n;
 
     // Calculate gyro offset
-    gyroOff[0] += (gyro[0] - gyroOff[0]) / n;
-    gyroOff[1] += (gyro[1] - gyroOff[1]) / n;
-    gyroOff[2] += (gyro[2] - gyroOff[2]) / n;
+    gyroOff[0] += (gyro_deg[0] - gyroOff[0]) / n;
+    gyroOff[1] += (gyro_deg[1] - gyroOff[1]) / n;
+    gyroOff[2] += (gyro_deg[2] - gyroOff[2]) / n;
 
     n++;
   }
@@ -85,7 +85,7 @@ void IMU::filterAccGyr() {
   // Center and filter acceleration
   for (uint8_t ii = 0; ii < 3; ii++) {
     acc[ii] = accRaw[ii] * (abs(accRaw[ii]) > ACC_FILTER) - accOff[ii];
-    gyro[ii] = gyroRaw[ii] * (abs(gyroRaw[ii]) > GYRO_FILTER) - gyroOff[ii];
+    gyro_deg[ii] = gyroRaw[ii] * (abs(gyroRaw[ii]) > GYRO_FILTER) - gyroOff[ii];
   }
 }
 
@@ -146,7 +146,7 @@ void IMU::calcAngle() {
     for (uint8_t jj = 0; jj < c_len-1; jj++) {
       prevGyro[ii][jj] = prevGyro[ii][jj+1];
     }
-    prevGyro[ii][c_len-1] = gyro[ii];
+    prevGyro[ii][c_len-1] = gyro_deg[ii];
 
     float sumdiff = 0.0F;
     for (uint8_t kk = 0; kk < c_len; kk++) {
@@ -156,9 +156,18 @@ void IMU::calcAngle() {
     if (sumdiff < 0.01) {
       return;
     } else {
-      ang[ii] = ang[ii] + gyro[ii] * dt / 1000; // ms to s
+      ang_deg[ii] = ang_deg[ii] + gyro_deg[ii] * dt / 1000; // ms to s
     }
-    ang[ii] = fmod(360 + fmod(ang[ii], 360), 360);
+    ang_deg[ii] = fmod(360 + fmod(ang_deg[ii], 360), 360);
+  }
+}
+
+void IMU::convertToRad() {
+
+  for (uint8_t ii = 0; ii < 3; ii++) {
+
+    gyro[ii] = gyro_deg[ii]*DEG_TO_RAD;
+    ang[ii] = ang_deg[ii]*DEG_TO_RAD;    
   }
 }
 
@@ -192,9 +201,9 @@ void IMU::outputValues(unsigned long t) {
   Serial.print(pos[1]);
   
   Serial.print(",");
-  Serial.print(gyro[2]*DEG_TO_RAD);
+  Serial.print(gyro[2]);
   Serial.print(",");
-  Serial.println(ang[2]*DEG_TO_RAD);
+  Serial.println(ang[2]);
 
   // for i = 1:10:
   //   Serial.print(logger[i]);
@@ -240,10 +249,12 @@ void IMU::update(unsigned long t) {
   calcPosition();
   calcAngle();
 
+  convertToRad();
+
   zeroAcc();
 
-  #ifdef DEBUG
-    // outputValues(t);
+  #ifdef DEBUG_IMU
+    outputValues(t);
   #endif
 
   t_prev = t;

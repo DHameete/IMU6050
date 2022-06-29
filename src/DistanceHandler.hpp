@@ -17,8 +17,8 @@ public:
     void update();   
 
     double ang = 0;
-    int16_t avgDisX = 0;
-    uint16_t avgDisY = 0;
+    float avgDisX = 0;
+    float avgDisY = 0;
 
 
 private:
